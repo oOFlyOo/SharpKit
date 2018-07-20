@@ -78,6 +78,8 @@ namespace SharpKit.Compiler.CsToJs
 
             ProcessArgsCustomization();
 
+            ProcessEnum();
+
             ProcessGenericMethodArgs();
 
             var inlineCodeExpression = ProcessInlineCodeExpression();
@@ -291,6 +293,27 @@ namespace SharpKit.Compiler.CsToJs
             }
         }
 
+        private void ProcessEnum()
+        {
+            if (Method.DeclaringType.FullName == "System.Enum")
+            {
+                // Enum.GetName
+                if (Method.Name == "ToString")
+                {
+                    // 插对象
+                    if (MethodAtt == null || !MethodAtt.InstanceImplementedAsExtension)
+                    {
+                        var ext = (JsMemberExpression)Node2.Member;
+                        Node2.Arguments.Insert(0, ext.PreviousMember);
+                        ext.PreviousMember = null;
+                    }
+                    // 插类型
+                    var ctor = SkJs.EntityTypeRefToMember(Res.TargetResult.Type, false);
+                    Node2.Arguments.Insert(0, Js.Invoke(new JsMemberExpression { Name = "Typeof" }, ctor as JsMemberExpression));
+                }
+            }
+        }
+
         void ProcessArgsCustomization()
         {
             if (MethodAtt != null)
@@ -461,8 +484,8 @@ namespace SharpKit.Compiler.CsToJs
                         {
                             var refFuncInvoke = new JsInvocationExpression
                             {
-                                Member = new JsMemberExpression {Name = "$Ref"},
-                                Arguments = new List<JsExpression> {memberExpr.PreviousMember, Js.String(memberExpr.Name)}
+                                Member = new JsMemberExpression { Name = "$Ref" },
+                                Arguments = new List<JsExpression> { memberExpr.PreviousMember, Js.String(memberExpr.Name) }
                             };
                             func.Add(Js.Var(RefIndexToName(i), refFuncInvoke).Statement());
                         }
@@ -477,7 +500,7 @@ namespace SharpKit.Compiler.CsToJs
                             func.Add(Js.Var(RefIndexToName(i), refFuncInvoke).Statement());
                         }
                     }
-                    else if(expr is JsIndexerAccessExpression)
+                    else if (expr is JsIndexerAccessExpression)
                     {
                         var indexerExpr = expr as JsIndexerAccessExpression;
                         var indexArg = indexerExpr.Arguments[0];
@@ -501,7 +524,7 @@ namespace SharpKit.Compiler.CsToJs
                         func.Add(memberExpr.Assign(Js.Member(RefIndexToName(i)).Member("Value")).Statement());
                     }
                 }
-          
+
                 func.Add(Js.Return(Js.Member("$res")));
                 Node2 = Importer.WrapFunctionAndInvoke(Res, func);
             }

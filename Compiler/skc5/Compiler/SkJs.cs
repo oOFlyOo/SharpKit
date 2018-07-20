@@ -181,6 +181,7 @@ namespace SharpKit.Compiler
                 else if (name == ".cctor")
                     name = "cctor";
             }
+
             var att = me.GetMetadata<JsMethodAttribute>(true);
             if (att != null && att.Name != null)
             {
@@ -211,6 +212,15 @@ namespace SharpKit.Compiler
                         name = "get_" + name;
                     else
                         name = "set_" + name;
+                }
+            }
+
+            // 前面有地方被统一修改
+            if (me.DeclaringType.FullName == "System.Enum")
+            {
+                if (name == "ToString" || name == "toString")
+                {
+                    name = "System.Enum.GetName";
                 }
             }
 
