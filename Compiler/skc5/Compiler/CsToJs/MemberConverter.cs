@@ -22,6 +22,7 @@ namespace SharpKit.Compiler.CsToJs
 {
     class MemberConverter
     {
+        private const string AutoPropertyPrefix = "_auto_";
 
         public bool LongFunctionNames { get; set; }
         public AstNodeConverter AstNodeConverter { get; set; }
@@ -176,7 +177,8 @@ namespace SharpKit.Compiler.CsToJs
         protected IField GenerateBackingField(IProperty pe)
         {
             var field = GenerateFakeField(pe);
-            field.Name = "_" + SkJs.GetEntityJsName(pe);
+            // 这里容易冲突，因此前缀复杂一点好
+            field.Name = AutoPropertyPrefix + SkJs.GetEntityJsName(pe);
             return field;
         }
         #endregion
@@ -359,7 +361,7 @@ namespace SharpKit.Compiler.CsToJs
                 }
                 else if (me.IsAutomaticPropertyAccessor())
                 {
-                    var bf = Js.Member("_" + SkJs.GetEntityJsName(me.AccessorOwner));
+                    var bf = Js.Member(AutoPropertyPrefix + SkJs.GetEntityJsName(me.AccessorOwner));
                     if (!me.IsStatic)
                         bf.PreviousMember = Js.This();
                     else if (!Sk.IsGlobalMethod(me))
