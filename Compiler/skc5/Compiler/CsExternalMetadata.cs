@@ -53,6 +53,14 @@ namespace SharpKit.Compiler
                     foreach (var pair in atts3)
                     {
                         var ce = ResolveType(pair.TargetType, pair.TargetTypeName);
+
+                        if (ce == null)
+                        {
+                            Log.Warn(string.Format("Resolve Type Failed：{0} {1}", pair.TargetType, pair.TargetTypeName));
+
+                            continue;
+                        }
+
                         //TODO: this is also possible, maybe better
                         //ce.Attributes.Add(pair.Entity);
 

@@ -126,9 +126,9 @@ namespace SharpKit.Compiler.CsToJs
                 instanceContext = VisitExpression(res.TargetResult);
                 node3 = instanceContext.Member(node2);
             }
+
             if (info != null && (instanceContext != null || firstPrm != null))
             {
-                var conv = info.Conversion;
                 if (info.ConversionTargetType != null && !UseNativeFunctions(info.ConversionTargetType))//delegate type
                 {
                     var parentMethod = info.Nodes.FirstOrDefault().GetCurrentMethod();
@@ -144,9 +144,46 @@ namespace SharpKit.Compiler.CsToJs
                     }
                 }
             }
+
+            // 其实以下的处理，也可以改代码，改成 Lambda 写法即可
+            // 这样子引用的并不是同一个函数，可能会造成内存泄露
+            if (res.TypeArguments.Count > 0 && info.Conversion.IsImplicit && me is SpecializedMethod)
+            {
+                var delegateFunc = node3 as JsInvocationExpression;
+
+                var sme = (SpecializedMethod)me;
+                var pars = sme.TypeArguments.Select(type => SkJs.EntityTypeRefToMember(type, false)).ToList();
+                pars.AddRange(sme.Parameters.Select(t => new JsCodeExpression
+                {
+                    Code = JsIdentifier(t.Name),
+                }));
+                var body = delegateFunc == null ? node3.Invoke(pars.ToArray()) : delegateFunc.Arguments[1].Invoke(pars.ToArray());
+                var func = new JsFunction ()
+                {
+                    Parameters = sme.Parameters.Select(t => JsIdentifier(t.Name)).ToList(),
+                };
+                JsStatement st;
+                if (sme.ReturnType.IsVoid())
+                {
+                    st = new JsExpressionStatement { Expression = body };
+                }
+                else
+                {
+                    st = new JsReturnStatement { Expression = body };
+                }
+                func.Block = new JsBlock { Statements = new List<JsStatement> { st } };
+
+                if (delegateFunc == null)
+                {
+                    node3 = func;
+                }
+                else
+                {
+                    delegateFunc.Arguments[1] = func;
+                }
+            }
+
             return node3;
-
-
         }
 
         public JsNode VisitOperatorResolveResult(OperatorResolveResult res)
@@ -268,6 +305,10 @@ namespace SharpKit.Compiler.CsToJs
             {
                 if(tInfo.Conversion.Method.ToString() != conversion.Method.ToString())
                 {
+                    //var tMessage = string.Format("方法绑定异常：绑定了错误的方法：{0}\n正确的绑定应该是：{1}", tInfo.Conversion.Method.ToString(), conversion.Method.ToString());
+                    //Log.Error(tMessage);
+
+                    //处理方法绑定异常
                     var tNewTag = res.Tag as ResolveResultInfo;
                     var tTag = input.Tag as ResolveResultInfo;
                     tTag.Conversion = tNewTag.Conversion;
@@ -370,11 +411,20 @@ namespace SharpKit.Compiler.CsToJs
                 //TODO:
                 //return Visit(JsTypeImporter.GetValueTypeInitializer(res.Type, Project));
             }
+
             var nodes = res.GetNodes();
             if (nodes.IsNotNullOrEmpty())
             {
                 if (nodes[0] != null)
                 {
+                    if (nodes[0] is DefaultValueExpression)
+                    {
+                        if (NeedExportDefaultValueExpression(res))
+                        {
+                            return ExportDefault(res.Type);
+                        }
+                    }
+
                     bool isPrimitiveExpr = nodes[0] is PrimitiveExpression;
                     if (!isPrimitiveExpr)
                     {
@@ -382,6 +432,15 @@ namespace SharpKit.Compiler.CsToJs
                     }
                 }
             }
+
+            if (NeedExportDefaultValueExpression(res))
+            {
+                if (res.ConstantValue == null)
+                {
+                    return ExportDefault(res.Type);
+                }
+            }
+
             return Js.Value(res.ConstantValue);
         }
 
@@ -823,11 +882,34 @@ namespace SharpKit.Compiler.CsToJs
                     }
                 }
             }
+
             var cspe = nodes.OfType<ParenthesizedExpression>().FirstOrDefault();
             if (cspe == null)
                 return exp;
             return new JsParenthesizedExpression { Expression = exp };
         }
+
+        private bool NeedExportDefaultValueExpression(ConstantResolveResult res)
+        {
+            // 值类型 default 处理
+            // 但是传给 C# 的时候，也许传 null 会更好
+            if (res.Type.Kind == TypeKind.Struct)
+            {
+                // 过滤 Nullable
+                if (res.Type.FullName != "System.Nullable")
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private JsInvocationExpression ExportDefault(IType type)
+        {
+            return Js.Member("Default").Invoke(SkJs.EntityTypeRefToMember(type));
+        }
+
         #endregion
 
         #region Visit Utils

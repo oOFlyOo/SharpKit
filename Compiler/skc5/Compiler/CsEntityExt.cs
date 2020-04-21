@@ -211,6 +211,7 @@ namespace SharpKit.Compiler
         public static EntityExt GetExtension(this IEntity ent, bool create)
         {
             var ext = (EntityExt)ent.Tag;
+
             if (ext == null && create)
             {
                 ext = new EntityExt(ent);
@@ -219,6 +220,4 @@ namespace SharpKit.Compiler
             return ext;
         }
     }
-
-
 }
